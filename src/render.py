@@ -382,18 +382,28 @@ PNG_LEVEL = int(_env_float("T2I_PNG_LEVEL", _compress.DEFAULT_PNG_LEVEL, 0, 9))
 _FAST_SHOT_ENABLED = os.getenv("T2I_FAST_SHOT", "1").strip().lower() not in ("0", "false", "no", "off")
 
 # 截图前的页面准备：等价于 Playwright 的 animations="disabled" + caret="hide"，并返回 devicePixelRatio
-_PREPARE_SHOT_JS = """(disableAnimations) => {
-    if (disableAnimations && document.getAnimations) {
+# 与 Playwright 一样先等两帧：页面在 load 后的下一帧才加 class 触发的 transition/动画此时才会开始，
+# 之后再统一结束；否则截到的是渐显动画的第一帧 (内容透明，图片空白)
+_PREPARE_SHOT_JS = """async (disableAnimations) => {
+    const settle = () => {
+        if (!disableAnimations || !document.getAnimations) return;
         for (const a of document.getAnimations()) {
             try {
                 const t = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
                 if (t && t.iterations === Infinity) a.cancel(); else a.finish();
             } catch (e) { try { a.cancel(); } catch (_) {} }
         }
-    }
+    };
+    // 兜底 100ms：极端情况下 rAF 不触发也不会卡住截图
+    const frame = () => new Promise(r => { requestAnimationFrame(() => r()); setTimeout(r, 100); });
+    settle();
+    await frame(); await frame();
+    settle();
     const s = document.createElement('style');
     s.textContent = '*{caret-color:transparent !important}';
     (document.head || document.documentElement).appendChild(s);
+    await frame();
+    settle();
     return window.devicePixelRatio || 1;
 }"""
 

@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-LABEL org.opencontainers.image.version="2.4.0"
+LABEL org.opencontainers.image.version="2.4.1"
 
 # 浏览器装到公共目录，降权后的运行用户也能使用
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \

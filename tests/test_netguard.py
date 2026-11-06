@@ -21,6 +21,14 @@ class TestIpAllowed(unittest.TestCase):
         for ip in ("8.8.8.8", "1.1.1.1", "2606:4700:4700::1111", "::ffff:8.8.8.8"):
             self.assertTrue(G.ip_allowed(ip), ip)
 
+    def test_fake_ip_only_for_resolved(self):
+        """fake-ip 网段：域名解析结果放行，IP 字面量仍拦截；关闭后都拦截"""
+        self.assertTrue(G.ip_allowed("198.18.2.143", resolved=True))
+        self.assertFalse(G.ip_allowed("198.18.2.143"))
+        self.assertFalse(G.ip_allowed("10.0.0.5", resolved=True))
+        with mock.patch.object(G, "FAKE_IP_NETS", ()):
+            self.assertFalse(G.ip_allowed("198.18.2.143", resolved=True))
+
     def test_invalid_blocked(self):
         self.assertFalse(G.ip_allowed("not-an-ip"))
 
@@ -52,7 +60,8 @@ class TestUrlAllowed(unittest.IsolatedAsyncioTestCase):
     async def test_dns_result_checked(self):
         """域名只要有一个解析结果是内网地址就拦截；解析失败也拦截"""
         async def fake_getaddrinfo(host, port, **kw):
-            table = {"pub.test": ["93.184.216.34"], "evil.test": ["93.184.216.34", "10.0.0.5"]}
+            table = {"pub.test": ["93.184.216.34"], "evil.test": ["93.184.216.34", "10.0.0.5"],
+                     "fake.test": ["198.18.0.7"]}
             if host not in table:
                 raise OSError("no such host")
             return [(2, 1, 6, "", (ip, port)) for ip in table[host]]
@@ -62,6 +71,8 @@ class TestUrlAllowed(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await G.url_allowed("https://pub.test/a.png", "public"))
             self.assertFalse(await G.url_allowed("https://evil.test/a.png", "public"))
             self.assertFalse(await G.url_allowed("https://missing.test/", "public"))
+            self.assertTrue(await G.url_allowed("https://fake.test/a.js", "public"))
+            self.assertFalse(await G.url_allowed("http://198.18.0.7/", "public"))
 
     async def test_policies(self):
         self.assertFalse(await G.url_allowed("https://8.8.8.8/", "none"))

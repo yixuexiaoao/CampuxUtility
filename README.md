@@ -1,11 +1,11 @@
 # Idoknow-api-text2img
 
-当前版本：**2.4.0**（见 `src/version.py`）
+当前版本：**2.4.1**（见 `src/version.py`）
 
 ### 如何确认正在运行的版本
 
-- 访问 `GET /health`，返回中的 `version` 应为 `2.4.0`，`png8_active` 为 `true` 表示 256 色 PNG 压缩已生效；
-- 容器启动日志第一行会打印 `[t2i] version 2.4.0 | pillow=True numpy=True ... png8_active=True`；
+- 访问 `GET /health`，返回中的 `version` 应为 `2.4.1`，`png8_active` 为 `true` 表示 256 色 PNG 压缩已生效；
+- 容器启动日志第一行会打印 `[t2i] version 2.4.1 | pillow=True numpy=True ... png8_active=True`；
 - 所有图片响应都带 `X-T2I-Version` 响应头；`json` 模式返回的 `data.version` 也是版本号；
 - 在容器内自检（渲染一张长图并打印体积）：`docker exec <容器名> python -m src.selfcheck`
 
@@ -20,7 +20,7 @@
 | 图片体积 | 直接输出浏览器截图 | 用 Pillow/numpy 优化编码；文字类截图转 256 色 PNG，带逐块画质门槛，不满足自动回退 JPEG（见“图片体积压缩”） |
 | Markdown | 无专门处理 | `markdown-it-py` 解析并兼容大模型输出，缺依赖时依次回退 `markdown` 与内置解析器 |
 | 渲染性能 | 每次请求新建页面 | 页面池复用（`T2I_MAX_PAGES`），整页截图走 CDP `optimizeForSpeed` |
-| 安全 | 无网络限制 | `T2I_NETWORK` 拦截内网/回环/元数据地址与 `file://`（防 SSRF）；Jinja2 沙箱渲染；`tmplname` 限制字符；容器以非 root（uid 10001）运行 |
+| 安全 | 无网络限制 | `T2I_NETWORK` 拦截内网/回环/元数据地址与 `file://`（防 SSRF）；Jinja2 沙箱渲染；`tmplname` 限制字符；容器以非 root（uid 10001）运行；默认放行 fake-ip 代理（198.18.0.0/15）下的域名解析结果，可用 `T2I_NETWORK_FAKEIP=0` 关闭 |
 | 请求参数 | 基础截图选项 | 新增 `padding`、`default_css`、`clean_green`、`options.width`、`options.compress` 等 |
 | 可观测性 | 无 | `/health` 返回版本与压缩状态，响应头 `X-T2I-Version`，`python -m src.selfcheck` 自检 |
 | 镜像 | 仅装 Playwright | 内置中文与彩色 Emoji 字体，避免豆腐块；依赖层可缓存 |
@@ -104,7 +104,7 @@ Docker 镜像：`docker pull xiaobaiski/campuxutility:latest`
 
 ### 3. GET `/health` 或 `/ping`
 
-健康检查探针接口，返回 `{"status": "ok", "browser_ready": true, "version": "2.4.0", "pillow": true, "numpy": true, "optimize": true, "compress": "auto", "network": "public", "png8_active": true}`。
+健康检查探针接口，返回 `{"status": "ok", "browser_ready": true, "version": "2.4.1", "pillow": true, "numpy": true, "optimize": true, "compress": "auto", "network": "public", "png8_active": true}`。
 
 ---
 
@@ -121,13 +121,14 @@ Docker 镜像：`docker pull xiaobaiski/campuxutility:latest`
 | `T2I_FAST_SHOT` | `1` | 整页截图走 CDP `optimizeForSpeed`（像素一致，截图约快 40%）；`0` 关闭，失败时也会自动回退 |
 | `T2I_SCALE` | `2` | 输出分辨率倍数（1–3），图片宽度 = 920 × 倍数。聊天软件（如 QQ）会对收到的图片重新编码，此时体积主要由像素数决定：设为 `1.5` 体积约降 35%，手机全屏查看无可见差别 |
 | `T2I_NETWORK` | `public` | 渲染页面的网络访问策略：`public` 只允许访问公网地址；`none` 拦截所有网络请求（只能用内联/data: 资源）；`all` 不拦截（旧行为，仅限可信调用方） |
-| `T2I_NETWORK_ALLOW` | 空 | `public` 策略下额外放行的网段（逗号分隔 CIDR）。服务在 fake-ip 透明代理后面时，公网域名会解析到 `198.18.0.0/15`，需设为该网段 |
+| `T2I_NETWORK_ALLOW` | 空 | `public` 策略下额外放行的网段（逗号分隔 CIDR） |
+| `T2I_NETWORK_FAKEIP` | `1` | fake-ip 代理（Clash/mihomo/sing-box 等）会把公网域名解析到 `198.18.0.0/15`；默认放行**域名解析结果**落在该网段的请求，否则模板引用的 CDN 脚本/样式/字体全部被拦截、正文空白。直接写该网段 IP 仍拦截。设 `0` 关闭 |
 | `T2I_CHROMIUM_SANDBOX` | `0` | 设为 `1` 时开启 Chromium 沙箱（去掉 `--no-sandbox`），需要宿主允许 user namespace |
 
 ### 安全说明
 
 接口会在服务端 Chromium 中渲染调用方提交的任意 HTML，页面里的图片、样式、`fetch`、iframe、WebSocket 都由服务端发起请求。
-2.4.0 起默认（`T2I_NETWORK=public`）拦截所有指向内网、回环、链路本地（含云厂商元数据 `169.254.169.254`）及保留地址的请求，`file://` 等非网络协议也一律拒绝，防止借渲染探测或读取内网服务（SSRF）。
+2.4.1 起默认（`T2I_NETWORK=public`）拦截所有指向内网、回环、链路本地（含云厂商元数据 `169.254.169.254`）及保留地址的请求，`file://` 等非网络协议也一律拒绝，防止借渲染探测或读取内网服务（SSRF）。
 
 - 域名会先解析再判断，但解析与 Chromium 实际连接是两次独立的 DNS 查询，理论上存在 DNS rebinding 绕过窗口；安全要求高时请用 `T2I_NETWORK=none`，或在容器网络层隔离内网；
 - 开启请求拦截后 Playwright 会停用 HTTP 缓存，模板引用的外部字体/图片每次都会重新下载，建议尽量内联；

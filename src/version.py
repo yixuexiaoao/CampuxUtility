@@ -1,5 +1,8 @@
 """服务版本号 (每次发布修改这里)
 
+2.4.1  修复：fake-ip 代理环境下外部 CDN 脚本/样式被误拦截导致正文空白 (默认放行解析到 198.18.0.0/15 的域名，
+       T2I_NETWORK_FAKEIP=0 关闭)；快速截图先等两帧再结束动画，修复 transition 渐显内容截成空白；
+       被拦截的请求改为 warning 日志
 2.4.0  安全：渲染页面默认禁止访问内网/回环/元数据地址 (T2I_NETWORK=public|none|all)，防 SSRF；
        Docker 改为非 root 用户运行，可选开启 Chromium 沙箱 (T2I_CHROMIUM_SANDBOX)；
        CI：先跑单元测试再构建，密码经 stdin 登录，补 QEMU 多架构构建，通知改为可选
@@ -12,4 +15,4 @@
 2.0.0  排版重做、Markdown 兼容 LLM 写法、页面池提速、模板沙箱等安全修复
 """
 
-__version__ = "2.4.0"
+__version__ = "2.4.1"
