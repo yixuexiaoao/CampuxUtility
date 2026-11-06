@@ -25,7 +25,7 @@ concurrency:
 
 env:
   # 推送的镜像名可在仓库 Settings → Variables 中设置 DOCKER_IMAGE 覆盖
-  DOCKER_IMAGE: ${{ vars.DOCKER_IMAGE || 'xiaobai/campuxutility' }}
+  DOCKER_IMAGE: ${{ vars.DOCKER_IMAGE || 'xiaobaski/campuxutility' }}
 
 jobs:
   test:
