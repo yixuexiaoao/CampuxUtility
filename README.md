@@ -24,11 +24,11 @@
 | 请求参数 | 基础截图选项 | 新增 `padding`、`default_css`、`clean_green`、`options.width`、`options.compress` 等 |
 | 可观测性 | 无 | `/health` 返回版本与压缩状态，响应头 `X-T2I-Version`，`python -m src.selfcheck` 自检 |
 | 镜像 | 仅装 Playwright | 内置中文与彩色 Emoji 字体，避免豆腐块；依赖层可缓存 |
-| CI | 构建并推送镜像 | 先跑单元测试（`tests/`），再构建 amd64/arm64 并推送；镜像名可由仓库变量 `DOCKER_IMAGE` 覆盖，默认 `xiaobaski/campuxutility` |
+| CI | 构建并推送镜像 | 先跑单元测试（`tests/`），再构建 amd64/arm64 并推送；镜像名可由仓库变量 `DOCKER_IMAGE` 覆盖，默认 `xiaobaiski/campuxutility` |
 
 已知差异：过期图片清理在本仓库内置于 `src/api.py`（固定 24 小时），**暂不读取**源仓库的 `IMAGE_LIFETIME_HOURS` 环境变量。
 
-Docker 镜像：`docker pull xiaobaski/campuxutility:latest`
+Docker 镜像：`docker pull xiaobaiski/campuxutility:latest`
 
 
 ## 接口说明
