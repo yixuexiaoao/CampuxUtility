@@ -22,7 +22,7 @@ if __name__ == "__main__":
     import uvicorn
 
     # 从环境变量获取端口号，默认使用8999
-    port = os.getenv("PORT", 8999)
+    port = int(os.getenv("PORT", 8999))
 
     # 启动FastAPI服务器
     uvicorn.run("src.api:app", host="0.0.0.0", port=port)

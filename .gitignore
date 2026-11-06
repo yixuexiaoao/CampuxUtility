@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Local pip temp artifacts
+.pip-tmp/
+.deps/
+
 # C extensions
 *.so
 
@@ -160,4 +164,3 @@ cython_debug/
 #.idea/
 venv
 cache.json
-/tests

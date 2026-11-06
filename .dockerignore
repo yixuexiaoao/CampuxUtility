@@ -1,0 +1,10 @@
+data/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+.pip-tmp/
+tests/
+.venv*/

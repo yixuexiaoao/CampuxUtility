@@ -7,25 +7,91 @@ on:
     paths:
       - 'Dockerfile'
       - 'docker-compose.yml'
+      - 'requirements.txt'
       - 'src/**'
+      - 'tests/**'
       - '.github/workflows/build-latest-image.yaml'
       - 'main.py'
   workflow_dispatch:
 
+# 默认只读，各 job 不需要写仓库
+permissions:
+  contents: read
+
+# 同一分支的新提交会取消仍在进行的旧构建
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # 推送的镜像名可在仓库 Settings → Variables 中设置 DOCKER_IMAGE 覆盖
+  DOCKER_IMAGE: ${{ vars.DOCKER_IMAGE || 'xiaobai/campuxutility' }}
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Login to Registry
-      run: docker login --username=${{ secrets.DOCKER_HUB_USERNAME }} --password ${{ secrets.DOCKER_HUB_PASSWORD }}
-    - name: Create Buildx
-      run: docker buildx create --name mybuilder --use
-    - name: Build
-      run: docker buildx build --platform linux/arm64,linux/amd64 -t soulter/astrbot-t2i-service:latest . --push
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          # 与 Dockerfile 的基础镜像保持一致
+          python-version: '3.10'
+
+      # 测试用桩替换 playwright/fastapi，只需安装纯 Python 依赖
+      - name: Install test dependencies
+        run: pip install jinja2 markdown-it-py markdown Pillow numpy
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      # secrets 不能直接用在 if 条件里，先放到 job 级环境变量
+      ONEBOT_ENDPOINT: ${{ secrets.ONEBOT_V11_ENDPOINT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 多架构构建需要 QEMU 模拟 arm64
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 密码通过 stdin 传入，不会出现在进程参数与日志里
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 未配置通知相关 secrets 时跳过；密钥经环境变量传入，避免直接拼接进脚本
+      - name: Push Finish Notification
+        if: ${{ env.ONEBOT_ENDPOINT != '' }}
+        env:
+          ONEBOT_TOKEN: ${{ secrets.ONEBOT_V11_TOKEN }}
+          ONEBOT_GROUP_ID: ${{ secrets.ONEBOT_V11_GROUP_ID }}
+        run: |
+          payload=$(jq -n --arg gid "$ONEBOT_GROUP_ID" --arg msg "CampuxUtility 构建完成。" \
+            '{group_id: ($gid | tonumber), message: $msg}')
+          curl --fail --silent --show-error --max-time 15 \
+            --location "${ONEBOT_ENDPOINT}/send_group_msg" \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer ${ONEBOT_TOKEN}" \
+            --data "$payload"
